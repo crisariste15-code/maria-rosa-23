@@ -139,7 +139,7 @@ export function IntroExperience({ onEnter, webgl, tier, reduced }: Props) {
               <button className="btn-ghost" onClick={() => begin(false)}>
                 Comenzar en silencio
               </button>
-              <p className="mt-2 text-sm text-pearl/50">Se recomienda el sonido encendido y la pantalla en horizontal o vertical, como prefieras.</p>
+              <p className="mt-2 text-sm text-pearl/50">Se disfruta más con el sonido encendido.</p>
             </motion.div>
           </motion.div>
         )}

@@ -61,7 +61,7 @@ function Welcome() {
         initial={{ opacity: 0, scale: 0.92, filter: 'blur(10px)' }}
         animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
         transition={{ duration: 2, delay: 0.8 }}
-        className="font-script rose-text mt-2 text-7xl leading-tight drop-shadow-[0_4px_30px_rgba(120,40,90,.5)] sm:text-9xl"
+        className="font-script rose-text mt-2 text-6xl leading-tight whitespace-nowrap drop-shadow-[0_4px_30px_rgba(120,40,90,.5)] sm:text-9xl"
       >
         María Rosa
       </motion.h1>
