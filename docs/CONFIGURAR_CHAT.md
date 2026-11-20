@@ -18,7 +18,7 @@ El regalo funciona **sin** chat. Estos pasos activan el chat real. Toma unos 15�
 
 1. En el menú izquierdo: **SQL Editor** → **New query**.
 2. Abre el archivo `supabase/schema.sql`, copia **todo**, pégalo y pulsa **Run**. Debe terminar sin errores (es seguro volver a ejecutarlo).
-3. *(Recomendado)* Ejecuta también `supabase/tests.sql` (SQL Editor → New query → Run). Debe mostrar **OK ✅** en las 14 pruebas. Si alguna dice **FALLO ❌**, no compartas el chat todavía (ver `docs/SEGURIDAD_Y_PRUEBAS.md`).
+3. *(Recomendado)* Ejecuta también `supabase/tests.sql` (SQL Editor → New query → Run), **antes** de crear al administrador. Terminará con un mensaje rojo que en realidad es el **informe**: es lo normal, porque así se deshace todo lo de prueba. Las 14 líneas deben decir **OK ✅**. Si alguna dice **FALLO ❌**, no compartas el chat todavía (ver `docs/SEGURIDAD_Y_PRUEBAS.md`).
 
 ## 3. Crear a Cris como único administrador
 

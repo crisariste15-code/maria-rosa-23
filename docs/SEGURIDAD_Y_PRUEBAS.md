@@ -24,8 +24,8 @@
 ## Prueba automática de las políticas
 
 1. Supabase → **SQL Editor** → pega `supabase/tests.sql` → **Run**.
-2. Debes ver **OK ✅** en las 14 filas. Todo se deshace al final (`ROLLBACK`).
-3. Antes de ejecutarla, no debe existir aún un administrador real (la prueba crea el suyo). Si ya configuraste el tuyo, ejecútala en un proyecto de pruebas o adapta los UUID.
+2. El script termina con un **error rojo que contiene el informe**: es intencional, así se deshace todo (usuarios y mensajes de prueba incluidos). Las 14 líneas deben decir **OK ✅**.
+3. Antes de ejecutarla, no debe existir aún un administrador real (la prueba crea el suyo y se niega a correr si ya hay uno). Si ya configuraste el tuyo, ejecútala en un proyecto de pruebas o adapta los UUID.
 
 ## Lista de pruebas manuales (funcionales)
 
