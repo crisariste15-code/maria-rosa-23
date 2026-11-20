@@ -19,6 +19,20 @@ const MARIA_ROSA_WELCOME = [
   'Con cariño, Cris',
 ]
 
+function PrivacyLink() {
+  return (
+    <a
+      href={`${import.meta.env.BASE_URL}privacidad.html`}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="whitespace-nowrap underline"
+      onClick={(e) => e.stopPropagation()}
+    >
+      Leer el aviso de privacidad
+    </a>
+  )
+}
+
 function friendly(message: string): string {
   if (/row-level security|violates/i.test(message))
     return 'No se pudo enviar. Es posible que tu acceso esté desactivado o que Cris haya cerrado la conversación.'
@@ -105,7 +119,7 @@ function useConversation(me: Me | null, enabled: boolean) {
 }
 
 export function ChatWidget() {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(() => new URLSearchParams(window.location.search).has('chat'))
   const auth = useAuth()
   const me = auth.me
   const ready = Boolean(me && me.privacy_accepted && !me.blocked && me.role === 'visitor')
@@ -343,7 +357,8 @@ function AuthView() {
     const v = validate(false)
     if (v) return setErr(v)
     persist()
-    const { error } = await supabase!.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: appUrl() } })
+    // Al volver de Google se entra directo al jardín con el chat abierto (sin repetir la introducción).
+    const { error } = await supabase!.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: `${appUrl()}?mundo=1&chat=1` } })
     if (error) setErr(error.message)
   }
 
@@ -372,7 +387,9 @@ function AuthView() {
           )}
           <label className="flex items-start gap-2 text-xs leading-snug opacity-85">
             <input type="checkbox" checked={ok} onChange={(e) => setOk(e.target.checked)} className="mt-0.5 h-4 w-4 accent-[#e787ab]" />
-            <span>{PRIVACY_TEXT}</span>
+            <span>
+            {PRIVACY_TEXT} <PrivacyLink />
+          </span>
           </label>
           {AUTH_EMAIL && (
             <button className="btn-rose !py-2.5 text-base" disabled={busy} onClick={() => void sendCode()}>
@@ -450,7 +467,9 @@ function ProfileSetup({ me, onDone }: { me: Me; onDone: () => void }) {
       </label>
       <label className="flex items-start gap-2 text-xs leading-snug opacity-85">
         <input type="checkbox" checked={ok} onChange={(e) => setOk(e.target.checked)} className="mt-0.5 h-4 w-4 accent-[#e787ab]" />
-        <span>{PRIVACY_TEXT}</span>
+        <span>
+            {PRIVACY_TEXT} <PrivacyLink />
+          </span>
       </label>
       <button className="btn-rose !py-2.5 text-base" disabled={busy || !ok || !name.trim()} onClick={() => void save(name)}>
         {busy ? 'Guardando…' : 'Continuar'}
