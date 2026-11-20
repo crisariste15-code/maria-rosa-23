@@ -1,0 +1,122 @@
+@import "tailwindcss";
+
+@import "@fontsource/cormorant-garamond/400.css";
+@import "@fontsource/cormorant-garamond/500.css";
+@import "@fontsource/cormorant-garamond/600.css";
+@import "@fontsource/cormorant-garamond/400-italic.css";
+@import "@fontsource/cormorant-garamond/500-italic.css";
+@import "@fontsource/great-vibes/400.css";
+@import "@fontsource/caveat/500.css";
+@import "@fontsource/caveat/600.css";
+
+@theme {
+  --font-display: "Cormorant Garamond", Georgia, "Times New Roman", serif;
+  --font-script: "Great Vibes", "Brush Script MT", cursive;
+  --font-hand: "Caveat", "Segoe Print", cursive;
+  --font-ui: "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
+
+  --color-pearl: #fbf5f3;
+  --color-blush: #f3c9d5;
+  --color-dusty: #d99aae;
+  --color-champagne: #e9cf9f;
+  --color-lavender: #b9a4e3;
+  --color-sage: #9db39a;
+  --color-plum: #1b0f2e;
+  --color-night: #0b0614;
+}
+
+html {
+  background: #0b0614;
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+}
+body {
+  margin: 0;
+  background: #0b0614;
+  color: var(--color-pearl);
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+  overscroll-behavior-y: none;
+}
+::selection { background: #d99aae; color: #1b0f2e; }
+
+/* Barra de desplazamiento discreta */
+* { scrollbar-width: thin; scrollbar-color: rgba(233,207,159,.35) transparent; }
+
+.glass {
+  background: linear-gradient(160deg, rgba(34, 17, 52, 0.62), rgba(20, 9, 34, 0.55));
+  -webkit-backdrop-filter: blur(16px) saturate(1.2);
+  backdrop-filter: blur(16px) saturate(1.2);
+  border: 1px solid rgba(233, 207, 159, 0.28);
+  box-shadow: 0 10px 50px rgba(8, 2, 18, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  border-radius: 1.4rem;
+}
+
+.gold-text {
+  background: linear-gradient(100deg, #f7e6c4 0%, #e9cf9f 35%, #fff3d6 55%, #d9b46c 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+.rose-text {
+  background: linear-gradient(100deg, #ffd6e2 0%, #f3a3bd 45%, #fff0f4 70%, #e57fa1 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+
+.btn-rose {
+  display: inline-flex; align-items: center; justify-content: center; gap: .6rem;
+  padding: .95rem 1.8rem; border-radius: 999px;
+  font-family: var(--font-display); font-weight: 600; font-size: 1.15rem; letter-spacing: .02em;
+  color: #2a0f24; cursor: pointer;
+  background: linear-gradient(135deg, #f7d9a8, #f1a8c0 55%, #e787ab);
+  box-shadow: 0 0 0 1px rgba(255,255,255,.35) inset, 0 8px 30px rgba(231,135,171,.45), 0 0 60px rgba(247,217,168,.25);
+  transition: transform .35s cubic-bezier(.2,.8,.2,1), box-shadow .35s;
+}
+.btn-rose:hover { transform: translateY(-2px) scale(1.03); box-shadow: 0 0 0 1px rgba(255,255,255,.5) inset, 0 12px 40px rgba(231,135,171,.6), 0 0 80px rgba(247,217,168,.4); }
+.btn-rose:active { transform: scale(.98); }
+.btn-ghost {
+  display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
+  padding: .75rem 1.4rem; border-radius: 999px; cursor: pointer;
+  border: 1px solid rgba(233,207,159,.4); color: var(--color-champagne);
+  background: rgba(20,9,34,.35); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  font-family: var(--font-display); font-size: 1.05rem; transition: background .3s, border-color .3s;
+}
+.btn-ghost:hover { background: rgba(233,207,159,.12); border-color: rgba(233,207,159,.7); }
+
+.focus-ring:focus-visible, button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible {
+  outline: 2px solid #f3c9d5; outline-offset: 3px;
+}
+
+/* Brillo suave del botón flotante */
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(243,201,213,.55), 0 10px 30px rgba(8,2,18,.6); }
+  50% { box-shadow: 0 0 0 14px rgba(243,201,213,0), 0 10px 40px rgba(231,135,171,.55); }
+}
+.pulse-glow { animation: pulseGlow 3.2s ease-in-out infinite; }
+
+@keyframes floatY { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-6px) } }
+.float-y { animation: floatY 5s ease-in-out infinite; }
+
+@keyframes twinkle { 0%,100% { opacity: .25 } 50% { opacity: 1 } }
+
+/* Papel marfil de la carta */
+.paper {
+  background:
+    radial-gradient(ellipse at 20% 10%, rgba(255,255,255,.55), transparent 55%),
+    radial-gradient(ellipse at 90% 100%, rgba(214,180,120,.28), transparent 50%),
+    linear-gradient(180deg, #fbf3e3, #f3e6cb);
+  color: #4a2a22;
+  box-shadow: 0 30px 90px rgba(0,0,0,.6), inset 0 0 80px rgba(180,140,80,.18);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .pulse-glow, .float-y { animation: none; }
+}
