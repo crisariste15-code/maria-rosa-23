@@ -1,5 +1,9 @@
 # Configurar el chat privado «Tu servidor, Cris» (Supabase, plan gratuito)
 
+> ⚠️ **Actualización:** el chat ahora funciona **solo entre dos números de teléfono** (sin correo ni Google).
+> Usa esta guía para crear el proyecto de Supabase y el esquema (pasos 1 y 2), y luego sigue **`CHAT_POR_TELEFONO.md`**.
+> Los pasos de correo, SMTP y Google de más abajo ya no se usan.
+
 El regalo funciona **sin** chat. Estos pasos activan el chat real. Toma unos 15–20 minutos.
 
 > **Qué es cada cosa.** La página (GitHub Pages) es solo archivos estáticos. Los mensajes viven en
