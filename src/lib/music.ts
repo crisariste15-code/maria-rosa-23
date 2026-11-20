@@ -32,7 +32,9 @@ class MusicEngine {
   private chordCounter = 0
   private noteCounter = 0
   private fileEl: HTMLAudioElement | null = null
-  private target = 0.5
+  private silentEl: HTMLAudioElement | null = null
+  private fileUrl: string | null = null
+  private target = 0.9
 
   subscribe = (l: Listener) => {
     this.listeners.add(l)
@@ -43,19 +45,72 @@ class MusicEngine {
     this.listeners.forEach((l) => l())
   }
 
-  async start() {
+  /**
+   * IMPORTANTE: todo lo que el navegador exige "dentro del toque" (crear/reanudar el AudioContext,
+   * activar la sesión de audio) se hace de forma SÍNCRONA, sin ningún `await` antes. En iPhone,
+   * un `await` previo hace que el audio quede bloqueado y no suene nada.
+   */
+  start() {
     if (this.playing) return
     this.playing = true
     this.emit()
-    const url = await this.probeFile()
-    if (url) this.startFile(url)
+    this.unlockAudioSession()
+    if (this.fileUrl) this.startFile(this.fileUrl)
     else this.startSynth()
+    // Comprobación: si pasado un instante el contexto sigue sin sonar, se vuelve a intentar y, si no,
+    // el botón vuelve a "Activar música" para que se pueda tocar otra vez.
+    window.setTimeout(() => {
+      if (!this.playing || !this.ctx) return
+      if (this.ctx.state !== 'running') {
+        void this.ctx.resume()
+        window.setTimeout(() => {
+          if (this.playing && this.ctx && this.ctx.state !== 'running') {
+            this.playing = false
+            this.emit()
+          }
+        }, 900)
+      }
+    }, 700)
+  }
+
+  /** Se llama al cargar la página: averigua en segundo plano si existe public/musica/fondo.mp3. */
+  preload() {
+    void this.probeFile().then((u) => {
+      this.fileUrl = u
+    })
+    // Si la pantalla se apaga o la pestaña pasa a segundo plano, al volver se reanuda el audio.
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && this.playing && this.ctx && this.ctx.state !== 'running') void this.ctx.resume()
+    })
+  }
+
+  /** iPhone/iPad: el sonido de la web se silencia con el interruptor de silencio; esto lo evita. */
+  private unlockAudioSession() {
+    try {
+      const nav = navigator as Navigator & { audioSession?: { type: string } }
+      if (nav.audioSession) nav.audioSession.type = 'playback'
+    } catch {
+      /* no disponible */
+    }
+    if (!this.silentEl) {
+      try {
+        // Respaldo para iOS antiguos: un <audio> silencioso en bucle cambia la categoría de audio.
+        const el = new Audio(silentWavUri())
+        el.loop = true
+        el.setAttribute('playsinline', '')
+        this.silentEl = el
+      } catch {
+        /* sin respaldo */
+      }
+    }
+    void this.silentEl?.play().catch(() => undefined)
   }
 
   stop() {
     if (!this.playing) return
     this.playing = false
     this.emit()
+    this.silentEl?.pause()
     if (this.fileEl) {
       const el = this.fileEl
       this.fadeFile(el, 0, () => el.pause())
@@ -75,7 +130,7 @@ class MusicEngine {
 
   toggle() {
     if (this.playing) this.stop()
-    else void this.start()
+    else this.start()
   }
 
   // ---------- archivo opcional ----------
@@ -123,8 +178,11 @@ class MusicEngine {
       const ctx = new AC()
       this.ctx = ctx
       const comp = ctx.createDynamicsCompressor()
-      comp.threshold.value = -18
-      comp.ratio.value = 3
+      comp.threshold.value = -14
+      comp.knee.value = 14
+      comp.ratio.value = 3.5
+      comp.attack.value = 0.01
+      comp.release.value = 0.3
       comp.connect(ctx.destination)
       const master = ctx.createGain()
       master.gain.value = 0
@@ -200,11 +258,12 @@ class MusicEngine {
     pad.gain.linearRampToValueAtTime(0, t + dur + 2.6)
     const lp = ctx.createBiquadFilter()
     lp.type = 'lowpass'
-    lp.frequency.value = 1100
+    lp.frequency.value = 2600
     lp.Q.value = 0.4
     pad.connect(lp)
     lp.connect(this.bus!)
-    const notes = [...chord.pad]
+    // Una octava más arriba: los parlantes de celular casi no reproducen por debajo de ~200 Hz.
+    const notes = chord.pad.map((f) => f * 2)
     notes.forEach((f, i) => {
       for (const det of [-6, 6]) {
         const o = ctx.createOscillator()
@@ -212,7 +271,7 @@ class MusicEngine {
         o.frequency.value = f
         o.detune.value = det
         const g = ctx.createGain()
-        g.gain.value = 0.07
+        g.gain.value = 0.085
         o.connect(g)
         g.connect(pad)
         o.start(t)
@@ -220,11 +279,11 @@ class MusicEngine {
       }
     })
     const b = ctx.createOscillator()
-    b.type = 'sine'
-    b.frequency.value = chord.bass
+    b.type = 'triangle' // el triángulo trae armónicos audibles incluso en parlantes pequeños
+    b.frequency.value = chord.bass * 2
     const bg = ctx.createGain()
     bg.gain.setValueAtTime(0, t)
-    bg.gain.linearRampToValueAtTime(0.16, t + 1.5)
+    bg.gain.linearRampToValueAtTime(0.2, t + 1.5)
     bg.gain.linearRampToValueAtTime(0, t + dur + 1.5)
     b.connect(bg)
     bg.connect(this.bus!)
@@ -236,7 +295,7 @@ class MusicEngine {
     const ctx = this.ctx!
     const out = ctx.createGain()
     out.gain.setValueAtTime(0.0001, t)
-    out.gain.linearRampToValueAtTime(peak, t + 0.008)
+    out.gain.linearRampToValueAtTime(peak * 3.4, t + 0.008)
     out.gain.exponentialRampToValueAtTime(0.0001, t + 2.8)
     const pan = ctx.createStereoPanner()
     pan.pan.value = ((this.noteCounter * 37) % 100) / 100 - 0.5
@@ -260,4 +319,30 @@ class MusicEngine {
   }
 }
 
+/** WAV de 0,1 s en silencio, como data URI (sirve para "despertar" la sesión de audio en iOS). */
+function silentWavUri(): string {
+  const samples = 800
+  const bytes = new Uint8Array(44 + samples)
+  const dv = new DataView(bytes.buffer)
+  const w = (o: number, s: string) => [...s].forEach((c, i) => dv.setUint8(o + i, c.charCodeAt(0)))
+  w(0, 'RIFF')
+  dv.setUint32(4, 36 + samples, true)
+  w(8, 'WAVE')
+  w(12, 'fmt ')
+  dv.setUint32(16, 16, true)
+  dv.setUint16(20, 1, true) // PCM
+  dv.setUint16(22, 1, true) // mono
+  dv.setUint32(24, 8000, true)
+  dv.setUint32(28, 8000, true)
+  dv.setUint16(32, 1, true)
+  dv.setUint16(34, 8, true)
+  w(36, 'data')
+  dv.setUint32(40, samples, true)
+  bytes.fill(128, 44) // 128 = silencio en WAV de 8 bits
+  let bin = ''
+  bytes.forEach((b) => (bin += String.fromCharCode(b)))
+  return `data:audio/wav;base64,${btoa(bin)}`
+}
+
 export const music = new MusicEngine()
+if (typeof window !== 'undefined') music.preload()
