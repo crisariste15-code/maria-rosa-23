@@ -9,11 +9,13 @@ import {
   showNotification,
 } from '../lib/notify'
 import { Composer, MessageList, fmtTime, useTyping } from '../chat/shared'
+import { formatPhone, identifierToEmail, normalizePhone } from '../lib/phone'
 
 interface Row {
   conv_id: string
   visitor: string
   name: string
+  phone: string | null
   status: 'pending' | 'active' | 'closed'
   muted: boolean
   blocked: boolean
@@ -117,9 +119,9 @@ function Login() {
     e.preventDefault()
     setBusy(true)
     setErr(null)
-    const { error } = await supabase!.auth.signInWithPassword({ email: email.trim(), password })
+    const { error } = await supabase!.auth.signInWithPassword({ email: identifierToEmail(email), password })
     setBusy(false)
-    if (error) setErr('Correo o contraseña incorrectos.')
+    if (error) setErr('Número o clave incorrectos.')
   }
   const forgot = async () => {
     if (!email.trim()) return setErr('Escribe tu correo y vuelve a pulsar “Olvidé mi contraseña”.')
@@ -131,10 +133,12 @@ function Login() {
   return (
     <form onSubmit={submit} className="flex flex-col gap-3">
       <Title sub="Acceso exclusivo" />
-      <input className={input} type="email" autoComplete="username" placeholder="Correo" value={email} onChange={(e) => setEmail(e.target.value)} required />
-      <input className={input} type="password" autoComplete="current-password" placeholder="Contraseña" value={password} onChange={(e) => setPassword(e.target.value)} required />
+      <input className={input} type="text" inputMode="tel" autoComplete="username" placeholder="Tu número de teléfono" value={email} onChange={(e) => setEmail(e.target.value)} required />
+      <input className={input} type="password" autoComplete="current-password" placeholder="Tu clave" value={password} onChange={(e) => setPassword(e.target.value)} required />
       <button className="btn-rose !py-2.5 text-base" disabled={busy}>{busy ? 'Entrando…' : 'Entrar'}</button>
-      <button type="button" className="text-xs underline opacity-70" onClick={() => void forgot()}>Olvidé mi contraseña</button>
+      {email.includes('@') && (
+        <button type="button" className="text-xs underline opacity-70" onClick={() => void forgot()}>Olvidé mi contraseña</button>
+      )}
       {err && <p className="rounded-lg bg-red-500/15 px-3 py-2 text-xs text-red-200">{err}</p>}
       {info && <p className="rounded-lg bg-emerald-500/15 px-3 py-2 text-xs text-emerald-200">{info}</p>}
       <a className="text-center text-xs opacity-60 hover:opacity-100" href="#/">← Volver al regalo</a>
@@ -403,7 +407,7 @@ function Dashboard({ me, signOut }: { me: Me; signOut: () => Promise<void>; relo
                     <span className="truncate text-sm opacity-70">{r.last_sender && r.last_sender !== r.visitor ? 'Tú: ' : ''}{r.last_content ?? 'Sin mensajes todavía'}</span>
                     {r.unread > 0 && <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-[#e787ab] px-1.5 text-xs font-bold text-[#2a0f24]">{r.unread}</span>}
                   </span>
-                  <span className="text-[0.65rem] opacity-40">ID {r.visitor.slice(0, 8)}</span>
+                  <span className="text-[0.65rem] opacity-40">{r.phone ? formatPhone(r.phone) : `ID ${r.visitor.slice(0, 8)}`}</span>
                 </button>
               </li>
             ))}
@@ -425,7 +429,7 @@ function Dashboard({ me, signOut }: { me: Me; signOut: () => Promise<void>; relo
                 <button className="rounded-full px-2 py-1 text-lg hover:bg-white/10 md:hidden" onClick={() => setSelected(null)} aria-label="Volver a la bandeja">←</button>
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-semibold">{current.name}</p>
-                  <p className="truncate text-[0.7rem] opacity-55">ID {current.visitor} · {current.status === 'pending' ? 'solicitud' : current.status === 'closed' ? 'cerrada' : 'activa'}</p>
+                  <p className="truncate text-[0.7rem] opacity-55">{current.phone ? formatPhone(current.phone) : `ID ${current.visitor}`} · {current.status === 'pending' ? 'solicitud' : current.status === 'closed' ? 'cerrada' : 'activa'}</p>
                 </div>
                 <div className="flex flex-wrap gap-1.5 text-xs">
                   {current.status === 'pending' && <button className="btn-ghost !px-3 !py-1" onClick={() => void rpc('admin_set_status', { p_conv: current.conv_id, p_status: 'active' }, 'Solicitud aceptada')}>✓ Aceptar</button>}
@@ -472,6 +476,37 @@ function Dashboard({ me, signOut }: { me: Me; signOut: () => Promise<void>; relo
       )}
 
       {settings && <Settings sound={sound} onSound={(v) => { setSound(v); localStorage.setItem('mr23-admin-sound', v ? '1' : '0') }} onClose={() => setSettings(false)} />}
+    </div>
+  )
+}
+
+/** Arma el enlace que Cris le manda por WhatsApp: abre el regalo y deja la sesión iniciada sola. Todo ocurre en este navegador. */
+function InviteLink() {
+  const [tel, setTel] = useState('')
+  const [clave, setClave] = useState('')
+  const [copied, setCopied] = useState(false)
+  const p = normalizePhone(tel)
+  const link = p && clave ? `${appUrl()}?tel=${p}&clave=${encodeURIComponent(clave)}` : ''
+  return (
+    <div className="mt-2 space-y-2 text-sm">
+      <p className="text-xs opacity-60">Escribe su número y la clave que le creaste en Supabase. Verás un enlace que ya la deja dentro del chat con un toque. Nada se envía ni se guarda: el enlace se arma aquí.</p>
+      <input className={input} type="text" inputMode="tel" placeholder="Su número de teléfono" value={tel} onChange={(e) => setTel(e.target.value)} aria-label="Número de teléfono de María Rosa" />
+      <input className={input} type="text" placeholder="Su clave de acceso" value={clave} onChange={(e) => setClave(e.target.value)} aria-label="Clave de acceso de María Rosa" autoComplete="off" />
+      {link && (
+        <div className="space-y-2">
+          <p className="rounded-lg bg-white/10 p-2 text-xs break-all">{link}</p>
+          <button
+            className="btn-rose !px-5 !py-2 text-sm"
+            onClick={async () => {
+              await navigator.clipboard.writeText(link).catch(() => undefined)
+              setCopied(true)
+              window.setTimeout(() => setCopied(false), 2500)
+            }}
+          >
+            {copied ? '¡Copiado! ✓' : 'Copiar enlace'}
+          </button>
+        </div>
+      )}
     </div>
   )
 }
@@ -528,6 +563,9 @@ function Settings({ sound, onSound, onClose }: { sound: boolean; onSound: (v: bo
           </label>
           <p className="text-xs opacity-60">Los avisos funcionan mientras esta pestaña esté abierta. Los avisos por correo o WhatsApp aún no están integrados (ver docs/NOTIFICACIONES.md).</p>
         </div>
+
+        <h3 className="mt-6 text-sm font-semibold">Enlace de acceso directo</h3>
+        <InviteLink />
 
         <h3 className="mt-6 text-sm font-semibold">Verificación en dos pasos (recomendada)</h3>
         <div className="mt-2 text-sm">

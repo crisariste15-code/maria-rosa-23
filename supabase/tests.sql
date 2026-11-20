@@ -1,6 +1,6 @@
 -- =====================================================================
 --  Pruebas de seguridad (RLS) del chat.  Supabase → SQL Editor → Run.
---  Ejecútalas DESPUÉS de schema.sql y ANTES de crear al administrador real.
+--  Ejecútalas DESPUÉS de schema.sql y migracion-telefono.sql. Se pueden repetir cuando quieras.
 --
 --  Cómo leer el resultado:
 --    El script crea usuarios de prueba, los pone a hacer cosas prohibidas y
@@ -23,15 +23,19 @@ declare
   luis_conv uuid;
   i     int;
 begin
-  if exists (select 1 from public.profiles where role = 'admin') then
-    raise exception 'Ya existe un administrador real. Estas pruebas deben correrse ANTES de configurarlo.';
-  end if;
+  -- Todo esto se deshace al final. Se retira temporalmente al administrador real
+  -- para poder crear el de prueba (el índice solo admite uno).
+  update public.profiles set role = 'visitor' where role = 'admin';
+
+  -- Números de prueba autorizados (requiere haber ejecutado migracion-telefono.sql)
+  insert into public.allowed_phones (phone, display_name) values
+    ('51000000001', 'Cris'), ('51000000002', 'Ana'), ('51000000003', 'Luis');
 
   -- Usuarios simulados: Cris (admin), Ana y Luis (visitantes)
   insert into auth.users (id, email, aud, role, instance_id) values
-    (cris, 'cris-test@example.com', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000'),
-    (ana,  'ana-test@example.com',  'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000'),
-    (luis, 'luis-test@example.com', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000');
+    (cris, '51000000001@tel.mr23.chat', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000'),
+    (ana,  '51000000002@tel.mr23.chat', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000'),
+    (luis, '51000000003@tel.mr23.chat', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000');
   update public.profiles set role = 'admin', display_name = 'Cris', privacy_accepted_at = now() where id = cris;
   update public.profiles set display_name = 'Ana',  privacy_accepted_at = now() where id = ana;
   update public.profiles set display_name = 'Luis', privacy_accepted_at = now() where id = luis;
@@ -162,6 +166,22 @@ begin
   end;
   rep := rep || '14. Sin sesión (anon) NO puede leer mensajes: ' || case when blocked then 'OK ✅' else 'FALLO ❌' end || E'\n';
   reset role;
+
+  -- 15. Registro cerrado: un correo o número no autorizado NO puede crear cuenta
+  blocked := false;
+  begin
+    insert into auth.users (id, email, aud, role, instance_id)
+    values ('00000000-0000-0000-0000-0000000000d1', 'intruso@example.com', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000');
+  exception when others then blocked := true;
+  end;
+  rep := rep || '15. Un correo no autorizado NO puede registrarse: ' || case when blocked then 'OK ✅' else 'FALLO ❌' end || E'\n';
+  blocked := false;
+  begin
+    insert into auth.users (id, email, aud, role, instance_id)
+    values ('00000000-0000-0000-0000-0000000000d2', '51999999999@tel.mr23.chat', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000');
+  exception when others then blocked := true;
+  end;
+  rep := rep || '16. Un número no autorizado NO puede registrarse: ' || case when blocked then 'OK ✅' else 'FALLO ❌' end || E'\n';
 
   -- Lanzar el informe como error deshace TODO lo creado arriba.
   raise exception E'\n===== INFORME DE SEGURIDAD (todo se deshizo, no quedó nada) =====\n%', rep;

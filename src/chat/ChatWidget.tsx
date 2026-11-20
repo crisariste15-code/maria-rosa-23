@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { AUTH_EMAIL, AUTH_GOOGLE, CHAT_ENABLED, appUrl } from '../lib/config'
+import { CHAT_ENABLED } from '../lib/config'
+import { normalizePhone, phoneToEmail } from '../lib/phone'
 import { supabase } from '../lib/supabase'
 import { useAuth, type Conv, type Me, type Msg } from '../lib/useAuth'
 import { askNotificationPermission, notificationPermission, showNotification } from '../lib/notify'
@@ -127,6 +128,27 @@ export function ChatWidget() {
   const typing = useTyping(chat.conv?.id ?? null, me?.id)
   const [perm, setPerm] = useState(notificationPermission())
 
+  // Enlace de acceso: ?tel=…&clave=… inicia la sesión solo y borra la clave de la barra de direcciones.
+  const magic = useRef(false)
+  useEffect(() => {
+    if (!supabase || magic.current) return
+    const q = new URLSearchParams(window.location.search)
+    const tel = q.get('tel')
+    const clave = q.get('clave')
+    if (!tel || !clave) return
+    magic.current = true
+    const p = normalizePhone(tel)
+    const url = new URL(window.location.href)
+    url.searchParams.delete('tel')
+    url.searchParams.delete('clave')
+    window.history.replaceState(null, '', url.toString())
+    if (!p) return
+    localStorage.setItem('mr23-phone', p)
+    void supabase.auth.signInWithPassword({ email: phoneToEmail(p), password: clave }).then(({ error }) => {
+      if (error) setOpen(true) // si algo falla, se muestra el formulario con el número ya escrito
+    })
+  }, [])
+
   const unread = chat.msgs.filter((m) => m.sender_id !== me?.id && !m.read_at).length
 
   // Marcar como leído al tener el chat abierto y visible.
@@ -218,7 +240,7 @@ export function ChatWidget() {
             ) : auth.loading ? (
               <Centered>Cargando…</Centered>
             ) : !auth.session ? (
-              <AuthView />
+              <PhoneLogin />
             ) : !me ? (
               <Centered>
                 <p>No pudimos cargar tu perfil.</p>
@@ -306,126 +328,67 @@ function Welcome({ me }: { me: Me }) {
   )
 }
 
-/** Paso 1: nombre, aviso de privacidad y acceso seguro (código por correo o Google). */
-function AuthView() {
-  const [alias, setAlias] = useState(() => localStorage.getItem('mr23-alias') ?? '')
-  const [email, setEmail] = useState('')
-  const [code, setCode] = useState('')
-  const [step, setStep] = useState<'email' | 'code'>('email')
+/** Acceso por número de teléfono + clave personal. Sin correos ni Google: el chat es solo entre dos personas. */
+function PhoneLogin() {
+  const [phone, setPhone] = useState(() => new URLSearchParams(window.location.search).get('tel') ?? localStorage.getItem('mr23-phone') ?? '')
+  const [clave, setClave] = useState('')
   const [ok, setOk] = useState(() => localStorage.getItem('mr23-privacy') === '1')
   const [busy, setBusy] = useState(false)
-  const [msg, setMsg] = useState<string | null>(null)
   const [err, setErr] = useState<string | null>(null)
 
-  const persist = () => {
-    localStorage.setItem('mr23-alias', alias.trim())
-    localStorage.setItem('mr23-privacy', ok ? '1' : '0')
-  }
-  const validate = (needEmail: boolean) => {
-    if (!alias.trim()) return 'Escribe tu nombre o seudónimo.'
-    if (needEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return 'Escribe un correo válido.'
-    if (!ok) return 'Para continuar, acepta el aviso de privacidad.'
-    return null
-  }
-
-  const sendCode = async () => {
-    const v = validate(true)
-    if (v) return setErr(v)
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const p = normalizePhone(phone)
+    if (!p) return setErr('Escribe tu número de teléfono (9 dígitos, o con el código de país).')
+    if (!clave) return setErr('Escribe tu clave de acceso.')
+    if (!ok) return setErr('Para continuar, acepta el aviso de privacidad.')
     setErr(null)
     setBusy(true)
-    persist()
-    const { error } = await supabase!.auth.signInWithOtp({
-      email: email.trim(),
-      options: { shouldCreateUser: true, data: { full_name: alias.trim() } },
-    })
+    localStorage.setItem('mr23-privacy', '1')
+    localStorage.setItem('mr23-phone', p)
+    const { error } = await supabase!.auth.signInWithPassword({ email: phoneToEmail(p), password: clave })
     setBusy(false)
-    if (error) return setErr(/rate|limit/i.test(error.message) ? 'Se enviaron demasiados códigos. Espera unos minutos e inténtalo de nuevo.' : error.message)
-    setStep('code')
-    setMsg(`Te enviamos un código a ${email.trim()}. Revisa también la carpeta de spam.`)
-  }
-
-  const verify = async () => {
-    if (code.trim().length < 6) return setErr('Escribe el código que llegó a tu correo.')
-    setErr(null)
-    setBusy(true)
-    const { error } = await supabase!.auth.verifyOtp({ email: email.trim(), token: code.trim(), type: 'email' })
-    setBusy(false)
-    if (error) setErr('El código no es válido o ya venció. Pide uno nuevo.')
-  }
-
-  const google = async () => {
-    const v = validate(false)
-    if (v) return setErr(v)
-    persist()
-    // Al volver de Google se entra directo al jardín con el chat abierto (sin repetir la introducción).
-    const { error } = await supabase!.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: `${appUrl()}?mundo=1&chat=1` } })
-    if (error) setErr(error.message)
+    if (error) setErr(/rate|limit|many/i.test(error.message) ? 'Demasiados intentos. Espera unos minutos.' : 'Ese número o esa clave no son correctos.')
   }
 
   const input = 'w-full rounded-xl border border-white/15 bg-white/10 px-3.5 py-2.5 text-pearl placeholder-white/40 outline-none focus:border-[#f1a8c0]'
 
   return (
-    <div className="flex flex-1 flex-col gap-3 overflow-y-auto px-4 py-4 font-ui text-[0.93rem]">
+    <form onSubmit={submit} className="flex flex-1 flex-col gap-3 overflow-y-auto px-4 py-4 font-ui text-[0.93rem]">
       <div className="rounded-2xl border border-white/10 bg-white/10 px-3.5 py-2.5">
         <span className="mb-0.5 block text-[0.7rem] opacity-60">Cris · mensaje de bienvenida</span>
         {WELCOME}
       </div>
-      <p className="text-sm opacity-80">Para escribirme necesitas una identidad verificada. Es rápido:</p>
-
+      <p className="text-sm opacity-80">
+        Este chat es privado: solo entran los números autorizados. Escribe tu número y la clave personal que Cris te mandó por WhatsApp.
+      </p>
       <label className="block">
-        <span className="mb-1 block text-xs opacity-70">Tu nombre o seudónimo</span>
-        <input className={input} value={alias} maxLength={40} onChange={(e) => setAlias(e.target.value)} placeholder="Ej. Ana" autoComplete="nickname" />
+        <span className="mb-1 block text-xs opacity-70">Tu número de teléfono</span>
+        <input
+          className={input}
+          type="tel"
+          inputMode="tel"
+          autoComplete="tel"
+          placeholder="987 654 321"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+        />
       </label>
-
-      {step === 'email' ? (
-        <>
-          {AUTH_EMAIL && (
-            <label className="block">
-              <span className="mb-1 block text-xs opacity-70">Tu correo (te enviaremos un código)</span>
-              <input className={input} type="email" inputMode="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="tucorreo@ejemplo.com" />
-            </label>
-          )}
-          <label className="flex items-start gap-2 text-xs leading-snug opacity-85">
-            <input type="checkbox" checked={ok} onChange={(e) => setOk(e.target.checked)} className="mt-0.5 h-4 w-4 accent-[#e787ab]" />
-            <span>
-            {PRIVACY_TEXT} <PrivacyLink />
-          </span>
-          </label>
-          {AUTH_EMAIL && (
-            <button className="btn-rose !py-2.5 text-base" disabled={busy} onClick={() => void sendCode()}>
-              {busy ? 'Enviando…' : 'Enviarme un código'}
-            </button>
-          )}
-          {AUTH_GOOGLE && (
-            <button className="btn-ghost !py-2.5" onClick={() => void google()}>
-              Entrar con Google
-            </button>
-          )}
-          {!AUTH_EMAIL && !AUTH_GOOGLE && <p className="text-sm text-red-200">No hay ningún método de acceso habilitado.</p>}
-        </>
-      ) : (
-        <>
-          <p className="rounded-xl bg-white/10 px-3 py-2 text-xs">{msg}</p>
-          <input
-            className={`${input} text-center text-xl tracking-[0.4em]`}
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            maxLength={10}
-            value={code}
-            onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
-            placeholder="Código"
-            aria-label="Código de verificación"
-          />
-          <button className="btn-rose !py-2.5 text-base" disabled={busy} onClick={() => void verify()}>
-            {busy ? 'Verificando…' : 'Entrar'}
-          </button>
-          <button className="text-xs underline opacity-70" onClick={() => { setStep('email'); setCode(''); setErr(null) }}>
-            Usar otro correo o pedir un código nuevo
-          </button>
-        </>
-      )}
+      <label className="block">
+        <span className="mb-1 block text-xs opacity-70">Tu clave de acceso</span>
+        <input className={input} type="password" autoComplete="current-password" value={clave} onChange={(e) => setClave(e.target.value)} />
+      </label>
+      <label className="flex items-start gap-2 text-xs leading-snug opacity-85">
+        <input type="checkbox" checked={ok} onChange={(e) => setOk(e.target.checked)} className="mt-0.5 h-4 w-4 accent-[#e787ab]" />
+        <span>
+          {PRIVACY_TEXT} <PrivacyLink />
+        </span>
+      </label>
+      <button className="btn-rose !py-2.5 text-base" disabled={busy}>
+        {busy ? 'Entrando…' : 'Entrar al chat'}
+      </button>
       {err && <p className="rounded-lg bg-red-500/15 px-3 py-2 text-xs text-red-200">{err}</p>}
-    </div>
+    </form>
   )
 }
 
@@ -451,7 +414,7 @@ function ProfileSetup({ me, onDone }: { me: Me; onDone: () => void }) {
 
   // Si ya aceptó el aviso en este dispositivo antes de ingresar, se confirma sola.
   useEffect(() => {
-    const a = localStorage.getItem('mr23-alias')
+    const a = localStorage.getItem('mr23-alias') || me.display_name
     if (!auto.current && a && localStorage.getItem('mr23-privacy') === '1') {
       auto.current = true
       void save(a)
